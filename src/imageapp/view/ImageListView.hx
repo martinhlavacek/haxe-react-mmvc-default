@@ -1,21 +1,19 @@
 package imageapp.view;
 
-import imageapp.model.ImageList;
+import imageapp.model.Image;
 import js.html.DivElement;
 import js.Browser;
+
 class ImageListView
 {
-    public function new()
-    {
-        trace("init imagelistview");
-    }
+    public function new() { }
 
-    public function generate(data: ImageList)
+    public function generate(data: Array<Image>)
     {
-        for(img in data){
+        for (img in data)
+        {
             var image = createImage(img.url);
             var div = createDivWithImage(image);
-
 
             Browser.document.getElementById('defaultApp').appendChild(div);
         }

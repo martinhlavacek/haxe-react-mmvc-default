@@ -6,6 +6,21 @@ function $extend(from, fields) {
 	if( fields.toString !== Object.prototype.toString ) proto.toString = fields.toString;
 	return proto;
 }
+var EReg = function(r,opt) {
+	opt = opt.split("u").join("");
+	this.r = new RegExp(r,opt);
+};
+$hxClasses["EReg"] = EReg;
+EReg.__name__ = ["EReg"];
+EReg.prototype = {
+	match: function(s) {
+		if(this.r.global) this.r.lastIndex = 0;
+		this.r.m = this.r.exec(s);
+		this.r.s = s;
+		return this.r.m != null;
+	}
+	,__class__: EReg
+};
 var HxOverrides = function() { };
 $hxClasses["HxOverrides"] = HxOverrides;
 HxOverrides.__name__ = ["HxOverrides"];
@@ -23,12 +38,69 @@ HxOverrides.substr = function(s,pos,len) {
 	} else if(len < 0) len = s.length + len - pos;
 	return s.substr(pos,len);
 };
+HxOverrides.indexOf = function(a,obj,i) {
+	var len = a.length;
+	if(i < 0) {
+		i += len;
+		if(i < 0) i = 0;
+	}
+	while(i < len) {
+		if(a[i] === obj) return i;
+		i++;
+	}
+	return -1;
+};
+HxOverrides.remove = function(a,obj) {
+	var i = HxOverrides.indexOf(a,obj,0);
+	if(i == -1) return false;
+	a.splice(i,1);
+	return true;
+};
 HxOverrides.iter = function(a) {
 	return { cur : 0, arr : a, hasNext : function() {
 		return this.cur < this.arr.length;
 	}, next : function() {
 		return this.arr[this.cur++];
 	}};
+};
+var Lambda = function() { };
+$hxClasses["Lambda"] = Lambda;
+Lambda.__name__ = ["Lambda"];
+Lambda.exists = function(it,f) {
+	var $it0 = $iterator(it)();
+	while( $it0.hasNext() ) {
+		var x = $it0.next();
+		if(f(x)) return true;
+	}
+	return false;
+};
+var List = function() {
+	this.length = 0;
+};
+$hxClasses["List"] = List;
+List.__name__ = ["List"];
+List.prototype = {
+	iterator: function() {
+		return new _$List_ListIterator(this.h);
+	}
+	,__class__: List
+};
+var _$List_ListIterator = function(head) {
+	this.head = head;
+	this.val = null;
+};
+$hxClasses["_List.ListIterator"] = _$List_ListIterator;
+_$List_ListIterator.__name__ = ["_List","ListIterator"];
+_$List_ListIterator.prototype = {
+	hasNext: function() {
+		return this.head != null;
+	}
+	,next: function() {
+		this.val = this.head[0];
+		this.head = this.head[1];
+		return this.val;
+	}
+	,__class__: _$List_ListIterator
 };
 var Main = function() { };
 $hxClasses["Main"] = Main;
@@ -88,11 +160,31 @@ Reflect.deleteField = function(o,field) {
 	delete(o[field]);
 	return true;
 };
+Reflect.makeVarArgs = function(f) {
+	return function() {
+		var a = Array.prototype.slice.call(arguments);
+		return f(a);
+	};
+};
 var Std = function() { };
 $hxClasses["Std"] = Std;
 Std.__name__ = ["Std"];
 Std.string = function(s) {
 	return js_Boot.__string_rec(s,"");
+};
+Std.random = function(x) {
+	if(x <= 0) return 0; else return Math.floor(Math.random() * x);
+};
+var StringBuf = function() {
+	this.b = "";
+};
+$hxClasses["StringBuf"] = StringBuf;
+StringBuf.__name__ = ["StringBuf"];
+StringBuf.prototype = {
+	add: function(x) {
+		this.b += Std.string(x);
+	}
+	,__class__: StringBuf
 };
 var StringTools = function() { };
 $hxClasses["StringTools"] = StringTools;
@@ -218,6 +310,10 @@ Type["typeof"] = function(v) {
 var mmvc_api_IContext = function() { };
 $hxClasses["mmvc.api.IContext"] = mmvc_api_IContext;
 mmvc_api_IContext.__name__ = ["mmvc","api","IContext"];
+mmvc_api_IContext.prototype = {
+	__class__: mmvc_api_IContext
+	,__properties__: {get_commandMap:"get_commandMap"}
+};
 var mmvc_impl_Context = function(contextView,autoStartup) {
 	if(autoStartup == null) autoStartup = true;
 	this.autoStartup = autoStartup;
@@ -228,6 +324,8 @@ mmvc_impl_Context.__name__ = ["mmvc","impl","Context"];
 mmvc_impl_Context.__interfaces__ = [mmvc_api_IContext];
 mmvc_impl_Context.prototype = {
 	startup: function() {
+	}
+	,shutdown: function() {
 	}
 	,set_contextView: function(value) {
 		if(this.contextView != value) {
@@ -295,13 +393,12 @@ app_ApplicationContext.__name__ = ["app","ApplicationContext"];
 app_ApplicationContext.__super__ = mmvc_impl_Context;
 app_ApplicationContext.prototype = $extend(mmvc_impl_Context.prototype,{
 	startup: function() {
-		console.log("startup");
-		var ll = this.get_triggerMap();
-		ll.mapClass(imageapp_model_ImageList,imageapp_command_LoadImageListCommand);
+		this.get_triggerMap().map(imageapp_model_ImageList,imageapp_command_LoadImageListCommand);
 		this.get_injector().mapSingleton(imageapp_model_ImageList);
-		this.get_injector().mapSingleton(imageapp_model_ImageList2);
 		this.get_mediatorMap().mapView(imageapp_view_ImageListView,imageapp_view_ImageViewMediator);
 		this.get_mediatorMap().mapView(app_ApplicationView,app_ApplicationViewMediator);
+	}
+	,shutdown: function() {
 	}
 	,__class__: app_ApplicationContext
 });
@@ -320,6 +417,9 @@ app_ApplicationView.prototype = {
 	createViews: function() {
 		var imageListView = new imageapp_view_ImageListView();
 		this.viewAdded(imageListView);
+	}
+	,isAdded: function(view) {
+		return true;
 	}
 	,__class__: app_ApplicationView
 };
@@ -383,7 +483,6 @@ app_ApplicationViewMediator.__name__ = ["app","ApplicationViewMediator"];
 app_ApplicationViewMediator.__super__ = mmvc_impl_Mediator;
 app_ApplicationViewMediator.prototype = $extend(mmvc_impl_Mediator.prototype,{
 	onRegister: function() {
-		console.log("appviewmediator");
 		mmvc_impl_Mediator.prototype.onRegister.call(this);
 		this.view.createViews();
 	}
@@ -395,11 +494,123 @@ app_ApplicationViewMediator.prototype = $extend(mmvc_impl_Mediator.prototype,{
 var haxe_IMap = function() { };
 $hxClasses["haxe.IMap"] = haxe_IMap;
 haxe_IMap.__name__ = ["haxe","IMap"];
-var haxe_ds_BalancedTree = function() { };
+var haxe_Http = function(url) {
+	this.url = url;
+	this.headers = new List();
+	this.params = new List();
+	this.async = true;
+};
+$hxClasses["haxe.Http"] = haxe_Http;
+haxe_Http.__name__ = ["haxe","Http"];
+haxe_Http.prototype = {
+	request: function(post) {
+		var me = this;
+		me.responseData = null;
+		var r = this.req = js_Browser.createXMLHttpRequest();
+		var onreadystatechange = function(_) {
+			if(r.readyState != 4) return;
+			var s;
+			try {
+				s = r.status;
+			} catch( e ) {
+				if (e instanceof js__$Boot_HaxeError) e = e.val;
+				s = null;
+			}
+			if(s != null) {
+				var protocol = window.location.protocol.toLowerCase();
+				var rlocalProtocol = new EReg("^(?:about|app|app-storage|.+-extension|file|res|widget):$","");
+				var isLocal = rlocalProtocol.match(protocol);
+				if(isLocal) if(r.responseText != null) s = 200; else s = 404;
+			}
+			if(s == undefined) s = null;
+			if(s != null) me.onStatus(s);
+			if(s != null && s >= 200 && s < 400) {
+				me.req = null;
+				me.onData(me.responseData = r.responseText);
+			} else if(s == null) {
+				me.req = null;
+				me.onError("Failed to connect or resolve host");
+			} else switch(s) {
+			case 12029:
+				me.req = null;
+				me.onError("Failed to connect to host");
+				break;
+			case 12007:
+				me.req = null;
+				me.onError("Unknown host");
+				break;
+			default:
+				me.req = null;
+				me.responseData = r.responseText;
+				me.onError("Http Error #" + r.status);
+			}
+		};
+		if(this.async) r.onreadystatechange = onreadystatechange;
+		var uri = this.postData;
+		if(uri != null) post = true; else {
+			var _g_head = this.params.h;
+			var _g_val = null;
+			while(_g_head != null) {
+				var p;
+				p = (function($this) {
+					var $r;
+					_g_val = _g_head[0];
+					_g_head = _g_head[1];
+					$r = _g_val;
+					return $r;
+				}(this));
+				if(uri == null) uri = ""; else uri += "&";
+				uri += encodeURIComponent(p.param) + "=" + encodeURIComponent(p.value);
+			}
+		}
+		try {
+			if(post) r.open("POST",this.url,this.async); else if(uri != null) {
+				var question = this.url.split("?").length <= 1;
+				r.open("GET",this.url + (question?"?":"&") + uri,this.async);
+				uri = null;
+			} else r.open("GET",this.url,this.async);
+		} catch( e1 ) {
+			if (e1 instanceof js__$Boot_HaxeError) e1 = e1.val;
+			me.req = null;
+			this.onError(e1.toString());
+			return;
+		}
+		if(!Lambda.exists(this.headers,function(h) {
+			return h.header == "Content-Type";
+		}) && post && this.postData == null) r.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
+		var _g_head1 = this.headers.h;
+		var _g_val1 = null;
+		while(_g_head1 != null) {
+			var h1;
+			h1 = (function($this) {
+				var $r;
+				_g_val1 = _g_head1[0];
+				_g_head1 = _g_head1[1];
+				$r = _g_val1;
+				return $r;
+			}(this));
+			r.setRequestHeader(h1.header,h1.value);
+		}
+		r.send(uri);
+		if(!this.async) onreadystatechange(null);
+	}
+	,onData: function(data) {
+	}
+	,onError: function(msg) {
+	}
+	,onStatus: function(status) {
+	}
+	,__class__: haxe_Http
+};
+var haxe_ds_BalancedTree = function() {
+};
 $hxClasses["haxe.ds.BalancedTree"] = haxe_ds_BalancedTree;
 haxe_ds_BalancedTree.__name__ = ["haxe","ds","BalancedTree"];
 haxe_ds_BalancedTree.prototype = {
-	get: function(key) {
+	set: function(key,value) {
+		this.root = this.setLoop(key,value,this.root);
+	}
+	,get: function(key) {
 		var node = this.root;
 		while(node != null) {
 			var c = this.compare(key,node.key);
@@ -408,18 +619,89 @@ haxe_ds_BalancedTree.prototype = {
 		}
 		return null;
 	}
+	,setLoop: function(k,v,node) {
+		if(node == null) return new haxe_ds_TreeNode(null,k,v,null);
+		var c = this.compare(k,node.key);
+		if(c == 0) return new haxe_ds_TreeNode(node.left,k,v,node.right,node == null?0:node._height); else if(c < 0) {
+			var nl = this.setLoop(k,v,node.left);
+			return this.balance(nl,node.key,node.value,node.right);
+		} else {
+			var nr = this.setLoop(k,v,node.right);
+			return this.balance(node.left,node.key,node.value,nr);
+		}
+	}
+	,balance: function(l,k,v,r) {
+		var hl;
+		if(l == null) hl = 0; else hl = l._height;
+		var hr;
+		if(r == null) hr = 0; else hr = r._height;
+		if(hl > hr + 2) {
+			if((function($this) {
+				var $r;
+				var _this = l.left;
+				$r = _this == null?0:_this._height;
+				return $r;
+			}(this)) >= (function($this) {
+				var $r;
+				var _this1 = l.right;
+				$r = _this1 == null?0:_this1._height;
+				return $r;
+			}(this))) return new haxe_ds_TreeNode(l.left,l.key,l.value,new haxe_ds_TreeNode(l.right,k,v,r)); else return new haxe_ds_TreeNode(new haxe_ds_TreeNode(l.left,l.key,l.value,l.right.left),l.right.key,l.right.value,new haxe_ds_TreeNode(l.right.right,k,v,r));
+		} else if(hr > hl + 2) {
+			if((function($this) {
+				var $r;
+				var _this2 = r.right;
+				$r = _this2 == null?0:_this2._height;
+				return $r;
+			}(this)) > (function($this) {
+				var $r;
+				var _this3 = r.left;
+				$r = _this3 == null?0:_this3._height;
+				return $r;
+			}(this))) return new haxe_ds_TreeNode(new haxe_ds_TreeNode(l,k,v,r.left),r.key,r.value,r.right); else return new haxe_ds_TreeNode(new haxe_ds_TreeNode(l,k,v,r.left.left),r.left.key,r.left.value,new haxe_ds_TreeNode(r.left.right,r.key,r.value,r.right));
+		} else return new haxe_ds_TreeNode(l,k,v,r,(hl > hr?hl:hr) + 1);
+	}
 	,compare: function(k1,k2) {
 		return Reflect.compare(k1,k2);
 	}
 	,__class__: haxe_ds_BalancedTree
 };
-var haxe_ds_TreeNode = function() { };
+var haxe_ds_TreeNode = function(l,k,v,r,h) {
+	if(h == null) h = -1;
+	this.left = l;
+	this.key = k;
+	this.value = v;
+	this.right = r;
+	if(h == -1) this._height = ((function($this) {
+		var $r;
+		var _this = $this.left;
+		$r = _this == null?0:_this._height;
+		return $r;
+	}(this)) > (function($this) {
+		var $r;
+		var _this1 = $this.right;
+		$r = _this1 == null?0:_this1._height;
+		return $r;
+	}(this))?(function($this) {
+		var $r;
+		var _this2 = $this.left;
+		$r = _this2 == null?0:_this2._height;
+		return $r;
+	}(this)):(function($this) {
+		var $r;
+		var _this3 = $this.right;
+		$r = _this3 == null?0:_this3._height;
+		return $r;
+	}(this))) + 1; else this._height = h;
+};
 $hxClasses["haxe.ds.TreeNode"] = haxe_ds_TreeNode;
 haxe_ds_TreeNode.__name__ = ["haxe","ds","TreeNode"];
 haxe_ds_TreeNode.prototype = {
 	__class__: haxe_ds_TreeNode
 };
-var haxe_ds_EnumValueMap = function() { };
+var haxe_ds_EnumValueMap = function() {
+	haxe_ds_BalancedTree.call(this);
+};
 $hxClasses["haxe.ds.EnumValueMap"] = haxe_ds_EnumValueMap;
 haxe_ds_EnumValueMap.__name__ = ["haxe","ds","EnumValueMap"];
 haxe_ds_EnumValueMap.__interfaces__ = [haxe_IMap];
@@ -476,6 +758,21 @@ haxe_ds_ObjectMap.prototype = {
 		delete(this.h.__keys__[id]);
 		return true;
 	}
+	,keys: function() {
+		var a = [];
+		for( var key in this.h.__keys__ ) {
+		if(this.h.hasOwnProperty(key)) a.push(this.h.__keys__[key]);
+		}
+		return HxOverrides.iter(a);
+	}
+	,iterator: function() {
+		return { ref : this.h, it : this.keys(), hasNext : function() {
+			return this.it.hasNext();
+		}, next : function() {
+			var i = this.it.next();
+			return this.ref[i.__id__];
+		}};
+	}
 	,__class__: haxe_ds_ObjectMap
 };
 var haxe_ds__$StringMap_StringMapIterator = function(map,keys) {
@@ -524,6 +821,22 @@ haxe_ds_StringMap.prototype = {
 		if(this.rh == null) return false;
 		return this.rh.hasOwnProperty("$" + key);
 	}
+	,remove: function(key) {
+		if(__map_reserved[key] != null) {
+			key = "$" + key;
+			if(this.rh == null || !this.rh.hasOwnProperty(key)) return false;
+			delete(this.rh[key]);
+			return true;
+		} else {
+			if(!this.h.hasOwnProperty(key)) return false;
+			delete(this.h[key]);
+			return true;
+		}
+	}
+	,keys: function() {
+		var _this = this.arrayKeys();
+		return HxOverrides.iter(_this);
+	}
 	,arrayKeys: function() {
 		var out = [];
 		for( var key in this.h ) {
@@ -538,6 +851,23 @@ haxe_ds_StringMap.prototype = {
 	}
 	,iterator: function() {
 		return new haxe_ds__$StringMap_StringMapIterator(this,this.arrayKeys());
+	}
+	,toString: function() {
+		var s = new StringBuf();
+		s.b += "{";
+		var keys = this.arrayKeys();
+		var _g1 = 0;
+		var _g = keys.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			var k = keys[i];
+			if(k == null) s.b += "null"; else s.b += "" + k;
+			s.b += " => ";
+			s.add(Std.string(__map_reserved[k] != null?this.getReserved(k):this.h[k]));
+			if(i < keys.length) s.b += ", ";
+		}
+		s.b += "}";
+		return s.b;
 	}
 	,__class__: haxe_ds_StringMap
 };
@@ -561,84 +891,230 @@ mmvc_api_ICommand.__name__ = ["mmvc","api","ICommand"];
 mmvc_api_ICommand.prototype = {
 	__class__: mmvc_api_ICommand
 };
-var mmvc_impl_TriggerCommand = function() { };
+var mmvc_impl_TriggerCommand = function() {
+};
 $hxClasses["mmvc.impl.TriggerCommand"] = mmvc_impl_TriggerCommand;
 mmvc_impl_TriggerCommand.__name__ = ["mmvc","impl","TriggerCommand"];
 mmvc_impl_TriggerCommand.__interfaces__ = [mmvc_api_ICommand];
 mmvc_impl_TriggerCommand.prototype = {
 	execute: function() {
 	}
+	,dispatch: function(trigger) {
+		this.triggerMap.dispatch(trigger);
+	}
 	,__class__: mmvc_impl_TriggerCommand
 };
-var imageapp_command_LoadImageListCommand = function() { };
+var imageapp_command_LoadImageListCommand = function() {
+	mmvc_impl_TriggerCommand.call(this);
+};
 $hxClasses["imageapp.command.LoadImageListCommand"] = imageapp_command_LoadImageListCommand;
 imageapp_command_LoadImageListCommand.__name__ = ["imageapp","command","LoadImageListCommand"];
 imageapp_command_LoadImageListCommand.__super__ = mmvc_impl_TriggerCommand;
 imageapp_command_LoadImageListCommand.prototype = $extend(mmvc_impl_TriggerCommand.prototype,{
 	execute: function() {
-		console.log("command");
-		var request = new yloader_valueObject_Request(utils_Common.Url);
+		var request = new yloader_valueObject_Request(imageapp_utils_Common.Url);
 		var xmlLoader = new yloader_impl_js_XMLHttpRequestLoader(request);
 		xmlLoader.onResponse = $bind(this,this.onResponse);
 		xmlLoader.load();
 	}
 	,onResponse: function(response) {
 		if(response.success) {
-			this.list2 = JSON.parse(response.data);
-			this.list2.changed.dispatch();
+			var listData = JSON.parse(response.data);
+			var arrayList = [];
+			var _g = 0;
+			var _g1 = listData.images;
+			while(_g < _g1.length) {
+				var image = _g1[_g];
+				++_g;
+				var img = new imageapp_model_Image(image.url);
+				arrayList.push(img);
+			}
+			this.imageList.addAll(arrayList);
 		}
 	}
 	,__class__: imageapp_command_LoadImageListCommand
 });
-var imageapp_model_Image = function() { };
+var imageapp_loader_ImageLoader = function(url) {
+	this.completed = new msignal_Signal1(String);
+	this._url = url;
+};
+$hxClasses["imageapp.loader.ImageLoader"] = imageapp_loader_ImageLoader;
+imageapp_loader_ImageLoader.__name__ = ["imageapp","loader","ImageLoader"];
+imageapp_loader_ImageLoader.prototype = {
+	getImages: function() {
+		var response = new haxe_Http(this._url);
+		response.onError = js_Browser.alert;
+		response.onData = $bind(this,this.onComplete);
+		response.request(false);
+	}
+	,onComplete: function(data) {
+		this.completed.dispatch(data);
+	}
+	,__class__: imageapp_loader_ImageLoader
+};
+var imageapp_model_Image = function(url) {
+	this.url = url;
+};
 $hxClasses["imageapp.model.Image"] = imageapp_model_Image;
 imageapp_model_Image.__name__ = ["imageapp","model","Image"];
 imageapp_model_Image.prototype = {
-	__class__: imageapp_model_Image
+	toString: function() {
+		return JSON.stringify(this);
+	}
+	,__class__: imageapp_model_Image
 };
 var mcore_data_Collection = function() { };
 $hxClasses["mcore.data.Collection"] = mcore_data_Collection;
 mcore_data_Collection.__name__ = ["mcore","data","Collection"];
-var mcore_data_CollectionBase = function() { };
+mcore_data_Collection.prototype = {
+	__class__: mcore_data_Collection
+	,__properties__: {get_size:"get_size"}
+};
+var mcore_data_CollectionBase = function() {
+	this.source = [];
+	this.changed = new msignal_Signal0();
+};
 $hxClasses["mcore.data.CollectionBase"] = mcore_data_CollectionBase;
 mcore_data_CollectionBase.__name__ = ["mcore","data","CollectionBase"];
 mcore_data_CollectionBase.__interfaces__ = [mcore_data_Collection];
 mcore_data_CollectionBase.prototype = {
-	iterator: function() {
+	get_size: function() {
+		return this.source.length;
+	}
+	,add: function(value) {
+		this.source.push(value);
+		this.notifyChanged();
+	}
+	,notifyChanged: function() {
+		this.changed.dispatch();
+	}
+	,addAll: function(values) {
+		if(values == null) return;
+		var s = this.source.length;
+		var $it0 = $iterator(values)();
+		while( $it0.hasNext() ) {
+			var value = $it0.next();
+			this.source.push(value);
+		}
+		if(this.source.length != s) this.notifyChanged();
+	}
+	,clear: function() {
+		if(this.isEmpty()) return;
+		this.source.splice(0,this.source.length);
+		this.notifyChanged();
+	}
+	,contains: function(value) {
+		return mcore_util_Iterables.indexOf(this.source,value) != -1;
+	}
+	,isEmpty: function() {
+		return this.source.length == 0;
+	}
+	,iterator: function() {
 		return HxOverrides.iter(this.source);
 	}
+	,remove: function(value) {
+		var hasChanged = false;
+		var i = this.source.length;
+		while(i-- > 0) if(this.source[i] == value) {
+			this.source.splice(0,1);
+			hasChanged = true;
+		}
+		if(hasChanged) this.notifyChanged();
+		return hasChanged;
+	}
+	,filter: function(predicate) {
+		var collectionType = js_Boot.getClass(this);
+		var collection = mcore_util_Types.createInstance(collectionType,[]);
+		var filteredValues = mcore_util_Iterables.filter(this.source,predicate);
+		collection.addAll(filteredValues);
+		return collection;
+	}
+	,toArray: function() {
+		return this.source.slice();
+	}
+	,toString: function() {
+		return this.source.toString();
+	}
 	,__class__: mcore_data_CollectionBase
+	,__properties__: {get_size:"get_size"}
 };
-var mcore_data_ArrayList = function() { };
+var mcore_data_ArrayList = function(values) {
+	mcore_data_CollectionBase.call(this);
+	if(values != null) this.addAll(values);
+};
 $hxClasses["mcore.data.ArrayList"] = mcore_data_ArrayList;
 mcore_data_ArrayList.__name__ = ["mcore","data","ArrayList"];
 mcore_data_ArrayList.__super__ = mcore_data_CollectionBase;
 mcore_data_ArrayList.prototype = $extend(mcore_data_CollectionBase.prototype,{
-	__class__: mcore_data_ArrayList
+	get_first: function() {
+		if(this.isEmpty()) return null;
+		return this.source[0];
+	}
+	,get_last: function() {
+		if(this.isEmpty()) return null;
+		return this.source[this.get_size() - 1];
+	}
+	,get_length: function() {
+		return this.source.length;
+	}
+	,insert: function(index,value) {
+		if(index < 0 || index > this.get_size()) throw new js__$Boot_HaxeError("index out of bounds");
+		this.source.splice(index,0,value);
+		this.notifyChanged();
+	}
+	,get: function(index) {
+		if(index < 0 || index >= this.get_size()) throw new js__$Boot_HaxeError("index out of bounds");
+		return this.source[index];
+	}
+	,indexOf: function(value) {
+		var _g1 = 0;
+		var _g = this.source.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			if(this.source[i] == value) return i;
+		}
+		return -1;
+	}
+	,removeAt: function(index) {
+		if(index < 0 || index >= this.get_size()) throw new js__$Boot_HaxeError("index out of bounds");
+		var value = this.source.splice(index,1)[0];
+		this.notifyChanged();
+		return value;
+	}
+	,__class__: mcore_data_ArrayList
+	,__properties__: $extend(mcore_data_CollectionBase.prototype.__properties__,{get_length:"get_length",get_last:"get_last",get_first:"get_first"})
 });
-var imageapp_model_ImageList = function() { };
+var imageapp_model_ImageList = function(values) {
+	mcore_data_ArrayList.call(this,values);
+};
 $hxClasses["imageapp.model.ImageList"] = imageapp_model_ImageList;
 imageapp_model_ImageList.__name__ = ["imageapp","model","ImageList"];
 imageapp_model_ImageList.__super__ = mcore_data_ArrayList;
 imageapp_model_ImageList.prototype = $extend(mcore_data_ArrayList.prototype,{
 	__class__: imageapp_model_ImageList
 });
-var imageapp_model_ImageList2 = function() { };
+var imageapp_model_ImageList2 = function() {
+	this.images = [];
+	this.changed = new msignal_Signal0();
+};
 $hxClasses["imageapp.model.ImageList2"] = imageapp_model_ImageList2;
 imageapp_model_ImageList2.__name__ = ["imageapp","model","ImageList2"];
 imageapp_model_ImageList2.prototype = {
 	__class__: imageapp_model_ImageList2
 };
+var imageapp_utils_Common = function() { };
+$hxClasses["imageapp.utils.Common"] = imageapp_utils_Common;
+imageapp_utils_Common.__name__ = ["imageapp","utils","Common"];
 var imageapp_view_ImageListView = function() {
-	console.log("init imagelistview");
 };
 $hxClasses["imageapp.view.ImageListView"] = imageapp_view_ImageListView;
 imageapp_view_ImageListView.__name__ = ["imageapp","view","ImageListView"];
 imageapp_view_ImageListView.prototype = {
 	generate: function(data) {
-		var $it0 = data.iterator();
-		while( $it0.hasNext() ) {
-			var img = $it0.next();
+		var _g = 0;
+		while(_g < data.length) {
+			var img = data[_g];
+			++_g;
 			var image = this.createImage(img.url);
 			var div = this.createDivWithImage(image);
 			window.document.getElementById("defaultApp").appendChild(div);
@@ -680,14 +1156,12 @@ imageapp_view_ImageViewMediator.__super__ = mmvc_impl_TriggerMediator;
 imageapp_view_ImageViewMediator.prototype = $extend(mmvc_impl_TriggerMediator.prototype,{
 	onRegister: function() {
 		mmvc_impl_TriggerMediator.prototype.onRegister.call(this);
-		console.log("register - imageviewmediator");
-		console.log(this.imageList);
-		console.log(this.imageList2);
-		this.mediate(this.imageList2.changed.addOnce($bind(this,this.loadCompleted)));
-		this.triggerMap.dispatch(imageapp_model_ImageList);
+		this.mediate(this.imageList.changed.addOnce($bind(this,this.loadCompleted)));
+		this.triggerMap.dispatch(this.imageList);
 	}
 	,loadCompleted: function() {
-		this.view.generate(this.imageList);
+		var data = this.imageList.toArray();
+		this.view.generate(data);
 	}
 	,__class__: imageapp_view_ImageViewMediator
 });
@@ -849,6 +1323,159 @@ js_Browser.createXMLHttpRequest = function() {
 	if(typeof ActiveXObject != "undefined") return new ActiveXObject("Microsoft.XMLHTTP");
 	throw new js__$Boot_HaxeError("Unable to create XMLHttpRequest object.");
 };
+js_Browser.alert = function(v) {
+	window.alert(js_Boot.__string_rec(v,""));
+};
+var mcore_util_Arrays = function() { };
+$hxClasses["mcore.util.Arrays"] = mcore_util_Arrays;
+mcore_util_Arrays.__name__ = ["mcore","util","Arrays"];
+mcore_util_Arrays.toString = function(source) {
+	return source.toString();
+};
+mcore_util_Arrays.shuffle = function(source) {
+	var copy = source.slice();
+	var shuffled = [];
+	while(copy.length > 0) shuffled.push(copy.splice(Std.random(copy.length),1)[0]);
+	return shuffled;
+};
+mcore_util_Arrays.lastItem = function(source) {
+	return source[source.length - 1];
+};
+var mcore_util_Iterables = function() { };
+$hxClasses["mcore.util.Iterables"] = mcore_util_Iterables;
+mcore_util_Iterables.__name__ = ["mcore","util","Iterables"];
+mcore_util_Iterables.contains = function(iterable,value) {
+	return mcore_util_Iterables.indexOf(iterable,value) != -1;
+};
+mcore_util_Iterables.indexOf = function(iterable,value) {
+	var i = 0;
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var member = $it0.next();
+		if(member == value) return i;
+		i++;
+	}
+	return -1;
+};
+mcore_util_Iterables.find = function(iterable,predicate) {
+	var item = null;
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var member = $it0.next();
+		if(predicate(member)) {
+			item = member;
+			break;
+		}
+	}
+	return item;
+};
+mcore_util_Iterables.filter = function(iterable,predicate) {
+	var items = [];
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var member = $it0.next();
+		if(predicate(member)) items.push(member);
+	}
+	return items;
+};
+mcore_util_Iterables.concat = function(iterableA,iterableB) {
+	var items = [];
+	var _g = 0;
+	var _g1 = [iterableA,iterableB];
+	while(_g < _g1.length) {
+		var iterable = _g1[_g];
+		++_g;
+		var $it0 = $iterator(iterable)();
+		while( $it0.hasNext() ) {
+			var item = $it0.next();
+			items.push(item);
+		}
+	}
+	return items;
+};
+mcore_util_Iterables.map = function(iterable,selector) {
+	var items = [];
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var item = $it0.next();
+		items.push(selector(item));
+	}
+	return items;
+};
+mcore_util_Iterables.mapWithIndex = function(iterable,selector) {
+	var items = [];
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var item = $it0.next();
+		items.push(selector(item,items.length));
+	}
+	return items;
+};
+mcore_util_Iterables.fold = function(iterable,aggregator,seed) {
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var member = $it0.next();
+		seed = aggregator(member,seed);
+	}
+	return seed;
+};
+mcore_util_Iterables.foldRight = function(iterable,aggregator,seed) {
+	return mcore_util_Iterables.fold(mcore_util_Iterables.reverse(iterable),aggregator,seed);
+};
+mcore_util_Iterables.reverse = function(iterable) {
+	var items = [];
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var member = $it0.next();
+		items.unshift(member);
+	}
+	return items;
+};
+mcore_util_Iterables.isEmpty = function(iterable) {
+	return !$iterator(iterable)().hasNext();
+};
+mcore_util_Iterables.toArray = function(iterable) {
+	var result = [];
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var member = $it0.next();
+		result.push(member);
+	}
+	return result;
+};
+mcore_util_Iterables.size = function(iterable) {
+	var i = 0;
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var member = $it0.next();
+		i++;
+	}
+	return i;
+};
+mcore_util_Iterables.count = function(iterable,predicate) {
+	var i = 0;
+	var $it0 = $iterator(iterable)();
+	while( $it0.hasNext() ) {
+		var member = $it0.next();
+		if(predicate(member)) i++;
+	}
+	return i;
+};
+var mcore_util_Types = function() { };
+$hxClasses["mcore.util.Types"] = mcore_util_Types;
+mcore_util_Types.__name__ = ["mcore","util","Types"];
+mcore_util_Types.isSubClassOf = function(object,type) {
+	return js_Boot.__instanceof(object,type) && Type.getClass(object) != type;
+};
+mcore_util_Types.createInstance = function(forClass,args) {
+	if(args == null) args = [];
+	try {
+		return Type.createInstance(forClass,args);
+	} catch( e ) {
+		if (e instanceof js__$Boot_HaxeError) e = e.val;
+		throw new js__$Boot_HaxeError("Error creating instance of " + Type.getClassName(forClass) + "(" + args.toString() + ")");
+	}
+};
 var minject_ClassMap = function() {
 	this.map = new haxe_ds_StringMap();
 };
@@ -868,8 +1495,35 @@ minject_ClassMap.prototype = {
 		var key = Type.getClassName(k);
 		return this.map.exists(key);
 	}
+	,remove: function(k) {
+		var key = Type.getClassName(k);
+		return this.map.remove(key);
+	}
+	,keys: function() {
+		return (function($this) {
+			var $r;
+			var _this;
+			{
+				var _g = [];
+				var $it0 = $this.map.keys();
+				while( $it0.hasNext() ) {
+					var k = $it0.next();
+					_g.push(Type.resolveClass(k));
+				}
+				_this = _g;
+			}
+			$r = HxOverrides.iter(_this);
+			return $r;
+		}(this));
+	}
 	,iterator: function() {
 		return this.map.iterator();
+	}
+	,toString: function() {
+		return this.map.toString();
+	}
+	,getKey: function(k) {
+		return Type.getClassName(k);
 	}
 	,__class__: minject_ClassMap
 };
@@ -897,6 +1551,9 @@ minject_InjectionConfig.prototype = {
 		if(this.result != null && result != null) console.log("Warning: Injector contains " + this.toString() + ".\nAttempting to overwrite this " + ("with mapping for [" + result.toString() + "].\nIf you have overwritten this mapping ") + "intentionally you can use `injector.unmap()` prior to your replacement mapping " + "in order to avoid seeing this message.");
 		this.result = result;
 	}
+	,setInjector: function(injector) {
+		this.injector = injector;
+	}
 	,toString: function() {
 		var named;
 		if(this.injectionName != null && this.injectionName != "") named = " named \"" + this.injectionName + "\" and"; else named = "";
@@ -918,6 +1575,12 @@ minject_Injector.prototype = {
 		config.setResult(new minject_result_InjectValueResult(useValue));
 		return config;
 	}
+	,mapClass: function(whenAskedFor,instantiateClass,named) {
+		if(named == null) named = "";
+		var config = this.getMapping(whenAskedFor,named);
+		config.setResult(new minject_result_InjectClassResult(instantiateClass));
+		return config;
+	}
 	,mapSingleton: function(whenAskedFor,named) {
 		if(named == null) named = "";
 		return this.mapSingletonOf(whenAskedFor,whenAskedFor,named);
@@ -927,6 +1590,12 @@ minject_Injector.prototype = {
 		var config = this.getMapping(whenAskedFor,named);
 		config.setResult(new minject_result_InjectSingletonResult(useSingletonOf));
 		return config;
+	}
+	,mapRule: function(whenAskedFor,useRule,named) {
+		if(named == null) named = "";
+		var config = this.getMapping(whenAskedFor,named);
+		config.setResult(new minject_result_InjectOtherRuleResult(useRule));
+		return useRule;
 	}
 	,getMapping: function(forClass,named) {
 		if(named == null) named = "";
@@ -974,6 +1643,12 @@ minject_Injector.prototype = {
 		var mapping = this.getConfigurationForRequest(forClass,named);
 		if(mapping == null) return false;
 		return mapping.hasResponse(this);
+	}
+	,getInstance: function(ofClass,named) {
+		if(named == null) named = "";
+		var mapping = this.getConfigurationForRequest(ofClass,named);
+		if(mapping == null || !mapping.hasResponse(this)) throw new js__$Boot_HaxeError("Error while getting mapping response: No mapping defined for class " + this.getClassName(ofClass) + ", named \"" + named + "\"");
+		return mapping.getResponse(this);
 	}
 	,createChildInjector: function() {
 		var injector = new minject_Injector();
@@ -1091,6 +1766,12 @@ minject_InjecteeSet.prototype = {
 	,remove: function(value) {
 		Reflect.deleteField(value,"__injected__");
 	}
+	,'delete': function(value) {
+		this.remove(value);
+	}
+	,iterator: function() {
+		return HxOverrides.iter([]);
+	}
 	,__class__: minject_InjecteeSet
 };
 var minject_InjecteeDescription = function(ctor,injectionPoints) {
@@ -1118,6 +1799,10 @@ minject_Reflector.prototype = {
 		if(actualClass == null) throw new js__$Boot_HaxeError("The parameter classOrClassName must be a Class or fully qualified class name.");
 		var classInstance = Type.createEmptyInstance(actualClass);
 		return js_Boot.__instanceof(classInstance,superClass);
+	}
+	,getClass: function(value) {
+		if(js_Boot.__instanceof(value,Class)) return value;
+		return Type.getClass(value);
 	}
 	,getFQCN: function(value) {
 		var fqcn;
@@ -1241,6 +1926,38 @@ minject_result_InjectionResult.prototype = {
 	}
 	,__class__: minject_result_InjectionResult
 };
+var minject_result_InjectClassResult = function(responseType) {
+	minject_result_InjectionResult.call(this);
+	this.responseType = responseType;
+};
+$hxClasses["minject.result.InjectClassResult"] = minject_result_InjectClassResult;
+minject_result_InjectClassResult.__name__ = ["minject","result","InjectClassResult"];
+minject_result_InjectClassResult.__super__ = minject_result_InjectionResult;
+minject_result_InjectClassResult.prototype = $extend(minject_result_InjectionResult.prototype,{
+	getResponse: function(injector) {
+		return injector.instantiate(this.responseType);
+	}
+	,toString: function() {
+		return "class " + Type.getClassName(this.responseType);
+	}
+	,__class__: minject_result_InjectClassResult
+});
+var minject_result_InjectOtherRuleResult = function(rule) {
+	minject_result_InjectionResult.call(this);
+	this.rule = rule;
+};
+$hxClasses["minject.result.InjectOtherRuleResult"] = minject_result_InjectOtherRuleResult;
+minject_result_InjectOtherRuleResult.__name__ = ["minject","result","InjectOtherRuleResult"];
+minject_result_InjectOtherRuleResult.__super__ = minject_result_InjectionResult;
+minject_result_InjectOtherRuleResult.prototype = $extend(minject_result_InjectionResult.prototype,{
+	getResponse: function(injector) {
+		return this.rule.getResponse(injector);
+	}
+	,toString: function() {
+		return this.rule.toString();
+	}
+	,__class__: minject_result_InjectOtherRuleResult
+});
 var minject_result_InjectSingletonResult = function(responseType) {
 	minject_result_InjectionResult.call(this);
 	this.responseType = responseType;
@@ -1283,11 +2000,15 @@ minject_result_InjectValueResult.prototype = $extend(minject_result_InjectionRes
 var mmvc_api_ICommandMap = function() { };
 $hxClasses["mmvc.api.ICommandMap"] = mmvc_api_ICommandMap;
 mmvc_api_ICommandMap.__name__ = ["mmvc","api","ICommandMap"];
+mmvc_api_ICommandMap.prototype = {
+	__class__: mmvc_api_ICommandMap
+};
 var mmvc_api_IMediatorMap = function() { };
 $hxClasses["mmvc.api.IMediatorMap"] = mmvc_api_IMediatorMap;
 mmvc_api_IMediatorMap.__name__ = ["mmvc","api","IMediatorMap"];
 mmvc_api_IMediatorMap.prototype = {
 	__class__: mmvc_api_IMediatorMap
+	,__properties__: {set_enabled:"set_enabled",set_contextView:"set_contextView"}
 };
 var mmvc_api_ITriggerMap = function() { };
 $hxClasses["mmvc.api.ITriggerMap"] = mmvc_api_ITriggerMap;
@@ -1298,6 +2019,10 @@ mmvc_api_ITriggerMap.prototype = {
 var mmvc_api_IViewMap = function() { };
 $hxClasses["mmvc.api.IViewMap"] = mmvc_api_IViewMap;
 mmvc_api_IViewMap.__name__ = ["mmvc","api","IViewMap"];
+mmvc_api_IViewMap.prototype = {
+	__class__: mmvc_api_IViewMap
+	,__properties__: {set_enabled:"set_enabled",set_contextView:"set_contextView"}
+};
 var mmvc_base_CommandMap = function(injector) {
 	this.injector = injector;
 	this.signalMap = new haxe_ds_ObjectMap();
@@ -1308,7 +2033,109 @@ $hxClasses["mmvc.base.CommandMap"] = mmvc_base_CommandMap;
 mmvc_base_CommandMap.__name__ = ["mmvc","base","CommandMap"];
 mmvc_base_CommandMap.__interfaces__ = [mmvc_api_ICommandMap];
 mmvc_base_CommandMap.prototype = {
-	__class__: mmvc_base_CommandMap
+	mapSignalClass: function(signalClass,commandClass,oneShot) {
+		if(oneShot == null) oneShot = false;
+		var signal = this.getSignalClassInstance(signalClass);
+		this.mapSignal(signal,commandClass,oneShot);
+		return signal;
+	}
+	,mapSignal: function(signal,commandClass,oneShot) {
+		if(oneShot == null) oneShot = false;
+		if(this.hasSignalCommand(signal,commandClass)) return;
+		var signalCommandMap;
+		if(this.signalMap.h.__keys__[signal.__id__] != null) signalCommandMap = this.signalMap.h[signal.__id__]; else {
+			signalCommandMap = new minject_ClassMap();
+			this.signalMap.set(signal,signalCommandMap);
+		}
+		var me = this;
+		var callbackFunction = Reflect.makeVarArgs(function(args) {
+			me.routeSignalToCommand(signal,args,commandClass,oneShot);
+		});
+		signalCommandMap.set(commandClass,callbackFunction);
+		signal.add(callbackFunction);
+	}
+	,unmapSignalClass: function(signalClass,commandClass) {
+		var signal = this.getSignalClassInstance(signalClass);
+		this.unmapSignal(signal,commandClass);
+		if(!this.hasCommand(signal)) {
+			this.injector.unmap(signalClass);
+			this.signalClassMap.remove(signalClass);
+		}
+	}
+	,unmapSignal: function(signal,commandClass) {
+		var callbacksByCommandClass = this.signalMap.h[signal.__id__];
+		if(callbacksByCommandClass == null) return;
+		var callbackFunction = callbacksByCommandClass.get(commandClass);
+		if(callbackFunction == null) return;
+		if(!this.hasCommand(signal)) this.signalMap.remove(signal);
+		signal.remove(callbackFunction);
+		callbacksByCommandClass.remove(commandClass);
+	}
+	,getSignalClassInstance: function(signalClass) {
+		if(this.signalClassMap.exists(signalClass)) return js_Boot.__cast(this.signalClassMap.get(signalClass) , msignal_Signal);
+		return this.createSignalClassInstance(signalClass);
+	}
+	,createSignalClassInstance: function(signalClass) {
+		var injectorForSignalInstance = this.injector;
+		if(this.injector.hasMapping(minject_Injector)) injectorForSignalInstance = this.injector.getInstance(minject_Injector);
+		var signal = injectorForSignalInstance.instantiate(signalClass);
+		injectorForSignalInstance.mapValue(signalClass,signal);
+		this.signalClassMap.set(signalClass,signal);
+		return signal;
+	}
+	,hasCommand: function(signal) {
+		var callbacksByCommandClass = this.signalMap.h[signal.__id__];
+		if(callbacksByCommandClass == null) return false;
+		var count = 0;
+		var $it0 = callbacksByCommandClass.iterator();
+		while( $it0.hasNext() ) {
+			var key = $it0.next();
+			count++;
+		}
+		return count > 0;
+	}
+	,hasSignalCommand: function(signal,commandClass) {
+		var callbacksByCommandClass = this.signalMap.h[signal.__id__];
+		if(callbacksByCommandClass == null) return false;
+		var callbackFunction = callbacksByCommandClass.get(commandClass);
+		return callbackFunction != null;
+	}
+	,routeSignalToCommand: function(signal,valueObjects,commandClass,oneshot) {
+		this.injector.mapValue(msignal_Signal,signal);
+		this.mapSignalValues(signal.valueClasses,valueObjects);
+		var command = this.createCommandInstance(commandClass);
+		this.injector.unmap(msignal_Signal);
+		this.unmapSignalValues(signal.valueClasses,valueObjects);
+		command.execute();
+		this.injector.attendedToInjectees.remove(command);
+		if(oneshot) this.unmapSignal(signal,commandClass);
+	}
+	,createCommandInstance: function(commandClass) {
+		return this.injector.instantiate(commandClass);
+	}
+	,mapSignalValues: function(valueClasses,valueObjects) {
+		var _g1 = 0;
+		var _g = valueClasses.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			this.injector.mapValue(valueClasses[i],valueObjects[i]);
+		}
+	}
+	,unmapSignalValues: function(valueClasses,valueObjects) {
+		var _g1 = 0;
+		var _g = valueClasses.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			this.injector.unmap(valueClasses[i]);
+		}
+	}
+	,detain: function(command) {
+		this.detainedCommands.set(command,true);
+	}
+	,release: function(command) {
+		if(this.detainedCommands.h.__keys__[command.__id__] != null) this.detainedCommands.remove(command);
+	}
+	,__class__: mmvc_base_CommandMap
 };
 var mmvc_base_ContextError = function(message,id) {
 	if(id == null) id = 0;
@@ -1349,6 +2176,10 @@ mmvc_base_ViewMapBase.prototype = {
 	,addListeners: function() {
 	}
 	,removeListeners: function() {
+	}
+	,onViewAdded: function(view) {
+	}
+	,onViewRemoved: function(view) {
 	}
 	,__class__: mmvc_base_ViewMapBase
 	,__properties__: {set_enabled:"set_enabled",set_contextView:"set_contextView"}
@@ -1391,6 +2222,18 @@ mmvc_base_MediatorMap.prototype = $extend(mmvc_base_ViewMapBase.prototype,{
 		}
 		if(autoCreate && this.contextView != null && viewClassName == Type.getClassName(Type.getClass(this.contextView))) this.createMediatorUsing(this.contextView,viewClassName,config);
 	}
+	,unmapView: function(viewClassOrName) {
+		var viewClassName = this.reflector.getFQCN(viewClassOrName);
+		var config = this.mappingConfigByViewClassName.get(viewClassName);
+		if(config != null && (config.autoCreate || config.autoRemove)) {
+			this.viewListenerCount--;
+			if(this.viewListenerCount == 0) this.removeListeners();
+		}
+		this.mappingConfigByViewClassName.remove(viewClassName);
+	}
+	,createMediator: function(viewComponent) {
+		return this.createMediatorUsing(viewComponent);
+	}
 	,registerMediator: function(viewComponent,mediator) {
 		this.mediatorByView.set(viewComponent,mediator);
 		var mapping;
@@ -1418,6 +2261,21 @@ mmvc_base_MediatorMap.prototype = $extend(mmvc_base_ViewMapBase.prototype,{
 	,retrieveMediator: function(viewComponent) {
 		return this.mediatorByView.get(viewComponent);
 	}
+	,hasMapping: function(viewClassOrName) {
+		var viewClassName = this.reflector.getFQCN(viewClassOrName);
+		return this.mappingConfigByViewClassName.exists(viewClassName);
+	}
+	,hasMediatorForView: function(viewComponent) {
+		return this.mediatorByView.exists(viewComponent);
+	}
+	,hasMediator: function(mediator) {
+		var $it0 = this.mediatorByView.keys();
+		while( $it0.hasNext() ) {
+			var key = $it0.next();
+			if(this.mediatorByView.h[key.__id__] == mediator) return true;
+		}
+		return false;
+	}
 	,addListeners: function() {
 		if(this.contextView != null && this.enabled) {
 			this.contextView.viewAdded = $bind(this,this.onViewAdded);
@@ -1442,6 +2300,15 @@ mmvc_base_MediatorMap.prototype = $extend(mmvc_base_ViewMapBase.prototype,{
 	,onViewRemoved: function(view) {
 		var config = this.mappingConfigByView.get(view);
 		if(config != null && config.autoRemove) this.removeMediatorByView(view);
+	}
+	,removeMediatorLater: function() {
+		var $it0 = this.mediatorsMarkedForRemoval.iterator();
+		while( $it0.hasNext() ) {
+			var view = $it0.next();
+			if(!this.contextView.isAdded(view)) this.removeMediatorByView(view);
+			this.mediatorsMarkedForRemoval.remove(view);
+		}
+		this.hasMediatorsMarkedForRemoval = false;
 	}
 	,createMediatorUsing: function(viewComponent,viewClassName,config) {
 		var mediator = this.mediatorByView.get(viewComponent);
@@ -1485,7 +2352,19 @@ $hxClasses["mmvc.base.TriggerMap"] = mmvc_base_TriggerMap;
 mmvc_base_TriggerMap.__name__ = ["mmvc","base","TriggerMap"];
 mmvc_base_TriggerMap.__interfaces__ = [mmvc_api_ITriggerMap];
 mmvc_base_TriggerMap.prototype = {
-	dispatch: function(trigger) {
+	map: function(trigger,command) {
+		if(this.isClass(trigger)) return this.mapClass(trigger,command);
+		if(this.isString(trigger)) return this.mapString(trigger,command);
+		if(this.isEnumValue(trigger)) return this.mapEnumValue(trigger,command);
+		throw new js__$Boot_HaxeError("Mapping type " + Std.string(Type["typeof"](trigger)) + " is not supported.");
+	}
+	,unmap: function(trigger,command) {
+		if(this.isClass(trigger)) return this.unmapClass(trigger,command);
+		if(this.isString(trigger)) return this.unmapString(trigger,command);
+		if(this.isEnumValue(trigger)) return this.unmapEnumValue(trigger,command);
+		throw new js__$Boot_HaxeError("Unmapping type " + Std.string(Type["typeof"](trigger)) + " is not supported.");
+	}
+	,dispatch: function(trigger) {
 		if(this.isClassInstance(trigger)) return this.dispatchClass(trigger);
 		if(this.isString(trigger)) return this.dispatchString(trigger);
 		if(this.isEnumValue(trigger)) return this.dispatchEnumValue(trigger);
@@ -1496,6 +2375,12 @@ mmvc_base_TriggerMap.prototype = {
 		var key = Type.getClassName(trigger);
 		var list = this.classToCommand.get(key);
 		if(list == null) this.classToCommand.set(key,[command]); else list.push(command);
+	}
+	,unmapClass: function(trigger,command) {
+		if(this.classToCommand == null) return;
+		var key = Type.getClassName(trigger);
+		var list = this.classToCommand.get(key);
+		if(list != null) HxOverrides.remove(list,command);
 	}
 	,dispatchClass: function(trigger) {
 		if(this.classToCommand == null) return;
@@ -1512,6 +2397,16 @@ mmvc_base_TriggerMap.prototype = {
 			}
 		}
 	}
+	,mapString: function(trigger,command) {
+		if(this.stringToCommand == null) this.stringToCommand = new haxe_ds_StringMap();
+		var list = this.stringToCommand.get(trigger);
+		if(list == null) this.stringToCommand.set(trigger,[command]); else list.push(command);
+	}
+	,unmapString: function(trigger,command) {
+		if(this.stringToCommand == null) return;
+		var list = this.stringToCommand.get(trigger);
+		if(list != null) HxOverrides.remove(list,command);
+	}
 	,dispatchString: function(trigger) {
 		if(this.stringToCommand == null) return;
 		var list = this.stringToCommand.get(trigger);
@@ -1524,11 +2419,48 @@ mmvc_base_TriggerMap.prototype = {
 			}
 		}
 	}
+	,mapEnumValue: function(trigger,command) {
+		if(this.enumValueToCommand == null) this.enumValueToCommand = new haxe_ds_EnumValueMap();
+		var list = this.enumValueToCommand.get(trigger);
+		if(list == null) this.enumValueToCommand.set(trigger,[command]); else list.push(command);
+	}
+	,unmapEnumValue: function(trigger,command) {
+		if(this.enumValueToCommand == null) return;
+		var list = this.enumValueToCommand.get(trigger);
+		if(list != null) HxOverrides.remove(list,command);
+	}
 	,dispatchEnumValue: function(trigger) {
 		if(this.enumValueToCommand == null) return;
 		var triggerClass;
 		if(trigger == null) triggerClass = null; else triggerClass = js_Boot.getClass(trigger);
 		var list = this.enumValueToCommand.get(trigger);
+		if(list != null) {
+			var _g = 0;
+			while(_g < list.length) {
+				var commandClass = list[_g];
+				++_g;
+				this.invokeCommand(trigger,triggerClass,commandClass);
+			}
+		}
+	}
+	,mapInstance: function(trigger,command) {
+		if(!this.isClassInstance(trigger)) throw new js__$Boot_HaxeError("Trigger " + Std.string(trigger) + " is not an object.");
+		if(this.instanceToCommand == null) this.instanceToCommand = new haxe_ds_ObjectMap();
+		var list = this.instanceToCommand.h[trigger.__id__];
+		if(list == null) this.instanceToCommand.set(trigger,[command]); else list.push(command);
+	}
+	,unmapInstance: function(trigger,command) {
+		if(!this.isClassInstance(trigger)) throw new js__$Boot_HaxeError("Trigger " + Std.string(trigger) + " is not an object.");
+		if(this.instanceToCommand == null) return;
+		var list = this.instanceToCommand.h[trigger.__id__];
+		if(list != null) HxOverrides.remove(list,command);
+	}
+	,dispatchInstance: function(trigger) {
+		if(!this.isClassInstance(trigger)) throw new js__$Boot_HaxeError("Trigger " + Std.string(trigger) + " is not an object.");
+		if(this.instanceToCommand == null) return;
+		var triggerClass;
+		if(trigger == null) triggerClass = null; else triggerClass = js_Boot.getClass(trigger);
+		var list = this.instanceToCommand.h[trigger.__id__];
 		if(list != null) {
 			var _g = 0;
 			while(_g < list.length) {
@@ -1546,6 +2478,9 @@ mmvc_base_TriggerMap.prototype = {
 			triggerCommand.trigger = trigger;
 		}
 		command.execute();
+	}
+	,isClass: function(source) {
+		return js_Boot.__instanceof(source,Class);
 	}
 	,isString: function(source) {
 		return typeof(source) == "string";
@@ -1569,7 +2504,37 @@ mmvc_base_ViewMap.__name__ = ["mmvc","base","ViewMap"];
 mmvc_base_ViewMap.__interfaces__ = [mmvc_api_IViewMap];
 mmvc_base_ViewMap.__super__ = mmvc_base_ViewMapBase;
 mmvc_base_ViewMap.prototype = $extend(mmvc_base_ViewMapBase.prototype,{
-	addListeners: function() {
+	mapPackage: function(packageName) {
+		if(HxOverrides.indexOf(this.mappedPackages,packageName,0) > -1) return;
+		this.mappedPackages.push(packageName);
+		this.viewListenerCount++;
+		if(this.viewListenerCount == 1) this.addListeners();
+	}
+	,unmapPackage: function(packageName) {
+		if(!HxOverrides.remove(this.mappedPackages,packageName)) return;
+		this.viewListenerCount--;
+		if(this.viewListenerCount == 0) this.removeListeners();
+	}
+	,mapType: function(type) {
+		if(this.mappedTypes.exists(type)) return;
+		this.mappedTypes.set(type,type);
+		this.viewListenerCount++;
+		if(this.viewListenerCount == 1) this.addListeners();
+		if(this.contextView != null && js_Boot.__instanceof(this.contextView,type)) this.injectInto(this.contextView);
+	}
+	,unmapType: function(type) {
+		if(!this.mappedTypes.exists(type)) return;
+		this.mappedTypes.remove(type);
+		this.viewListenerCount--;
+		if(this.viewListenerCount == 0) this.removeListeners();
+	}
+	,hasType: function(type) {
+		return this.mappedTypes.exists(type);
+	}
+	,hasPackage: function(packageName) {
+		return HxOverrides.indexOf(this.mappedPackages,packageName,0) > -1;
+	}
+	,addListeners: function() {
 		if(this.contextView == null || !this.enabled) return;
 		this.contextView.viewAdded = $bind(this,this.onViewAdded);
 		this.contextView.viewRemoved = $bind(this,this.onViewAdded);
@@ -1603,24 +2568,45 @@ mmvc_base_ViewMap.prototype = $extend(mmvc_base_ViewMapBase.prototype,{
 			}
 		}
 	}
+	,onViewRemoved: function(view) {
+	}
 	,injectInto: function(view) {
 		this.injector.injectInto(view);
 		this.injectedViews.set(view,true);
 	}
 	,__class__: mmvc_base_ViewMap
 });
-var msignal_Signal = function() { };
+var msignal_Signal = function(valueClasses) {
+	if(valueClasses == null) valueClasses = [];
+	this.valueClasses = valueClasses;
+	this.slots = msignal_SlotList.NIL;
+	this.priorityBased = false;
+};
 $hxClasses["msignal.Signal"] = msignal_Signal;
 msignal_Signal.__name__ = ["msignal","Signal"];
 msignal_Signal.prototype = {
-	addOnce: function(listener) {
+	add: function(listener) {
+		return this.registerListener(listener);
+	}
+	,addOnce: function(listener) {
 		return this.registerListener(listener,true);
+	}
+	,addWithPriority: function(listener,priority) {
+		if(priority == null) priority = 0;
+		return this.registerListener(listener,false,priority);
+	}
+	,addOnceWithPriority: function(listener,priority) {
+		if(priority == null) priority = 0;
+		return this.registerListener(listener,true,priority);
 	}
 	,remove: function(listener) {
 		var slot = this.slots.find(listener);
 		if(slot == null) return null;
 		this.slots = this.slots.filterNot(listener);
 		return slot;
+	}
+	,removeAll: function() {
+		this.slots = msignal_SlotList.NIL;
 	}
 	,registerListener: function(listener,once,priority) {
 		if(priority == null) priority = 0;
@@ -1645,9 +2631,15 @@ msignal_Signal.prototype = {
 		if(once == null) once = false;
 		return null;
 	}
+	,get_numListeners: function() {
+		return this.slots.get_length();
+	}
 	,__class__: msignal_Signal
+	,__properties__: {get_numListeners:"get_numListeners"}
 };
-var msignal_Signal0 = function() { };
+var msignal_Signal0 = function() {
+	msignal_Signal.call(this);
+};
 $hxClasses["msignal.Signal0"] = msignal_Signal0;
 msignal_Signal0.__name__ = ["msignal","Signal0"];
 msignal_Signal0.__super__ = msignal_Signal;
@@ -1665,6 +2657,48 @@ msignal_Signal0.prototype = $extend(msignal_Signal.prototype,{
 		return new msignal_Slot0(this,listener,once,priority);
 	}
 	,__class__: msignal_Signal0
+});
+var msignal_Signal1 = function(type) {
+	msignal_Signal.call(this,[type]);
+};
+$hxClasses["msignal.Signal1"] = msignal_Signal1;
+msignal_Signal1.__name__ = ["msignal","Signal1"];
+msignal_Signal1.__super__ = msignal_Signal;
+msignal_Signal1.prototype = $extend(msignal_Signal.prototype,{
+	dispatch: function(value) {
+		var slotsToProcess = this.slots;
+		while(slotsToProcess.nonEmpty) {
+			slotsToProcess.head.execute(value);
+			slotsToProcess = slotsToProcess.tail;
+		}
+	}
+	,createSlot: function(listener,once,priority) {
+		if(priority == null) priority = 0;
+		if(once == null) once = false;
+		return new msignal_Slot1(this,listener,once,priority);
+	}
+	,__class__: msignal_Signal1
+});
+var msignal_Signal2 = function(type1,type2) {
+	msignal_Signal.call(this,[type1,type2]);
+};
+$hxClasses["msignal.Signal2"] = msignal_Signal2;
+msignal_Signal2.__name__ = ["msignal","Signal2"];
+msignal_Signal2.__super__ = msignal_Signal;
+msignal_Signal2.prototype = $extend(msignal_Signal.prototype,{
+	dispatch: function(value1,value2) {
+		var slotsToProcess = this.slots;
+		while(slotsToProcess.nonEmpty) {
+			slotsToProcess.head.execute(value1,value2);
+			slotsToProcess = slotsToProcess.tail;
+		}
+	}
+	,createSlot: function(listener,once,priority) {
+		if(priority == null) priority = 0;
+		if(once == null) once = false;
+		return new msignal_Slot2(this,listener,once,priority);
+	}
+	,__class__: msignal_Signal2
 });
 var msignal_Slot = function(signal,listener,once,priority) {
 	if(priority == null) priority = 0;
@@ -1704,6 +2738,41 @@ msignal_Slot0.prototype = $extend(msignal_Slot.prototype,{
 	}
 	,__class__: msignal_Slot0
 });
+var msignal_Slot1 = function(signal,listener,once,priority) {
+	if(priority == null) priority = 0;
+	if(once == null) once = false;
+	msignal_Slot.call(this,signal,listener,once,priority);
+};
+$hxClasses["msignal.Slot1"] = msignal_Slot1;
+msignal_Slot1.__name__ = ["msignal","Slot1"];
+msignal_Slot1.__super__ = msignal_Slot;
+msignal_Slot1.prototype = $extend(msignal_Slot.prototype,{
+	execute: function(value1) {
+		if(!this.enabled) return;
+		if(this.once) this.remove();
+		if(this.param != null) value1 = this.param;
+		this.listener(value1);
+	}
+	,__class__: msignal_Slot1
+});
+var msignal_Slot2 = function(signal,listener,once,priority) {
+	if(priority == null) priority = 0;
+	if(once == null) once = false;
+	msignal_Slot.call(this,signal,listener,once,priority);
+};
+$hxClasses["msignal.Slot2"] = msignal_Slot2;
+msignal_Slot2.__name__ = ["msignal","Slot2"];
+msignal_Slot2.__super__ = msignal_Slot;
+msignal_Slot2.prototype = $extend(msignal_Slot.prototype,{
+	execute: function(value1,value2) {
+		if(!this.enabled) return;
+		if(this.once) this.remove();
+		if(this.param1 != null) value1 = this.param1;
+		if(this.param2 != null) value2 = this.param2;
+		this.listener(value1,value2);
+	}
+	,__class__: msignal_Slot2
+});
 var msignal_SlotList = function(head,tail) {
 	this.nonEmpty = false;
 	if(head == null && tail == null) {
@@ -1718,8 +2787,33 @@ var msignal_SlotList = function(head,tail) {
 $hxClasses["msignal.SlotList"] = msignal_SlotList;
 msignal_SlotList.__name__ = ["msignal","SlotList"];
 msignal_SlotList.prototype = {
-	prepend: function(slot) {
+	get_length: function() {
+		if(!this.nonEmpty) return 0;
+		if(this.tail == msignal_SlotList.NIL) return 1;
+		var result = 0;
+		var p = this;
+		while(p.nonEmpty) {
+			++result;
+			p = p.tail;
+		}
+		return result;
+	}
+	,prepend: function(slot) {
 		return new msignal_SlotList(slot,this);
+	}
+	,append: function(slot) {
+		if(slot == null) return this;
+		if(!this.nonEmpty) return new msignal_SlotList(slot);
+		if(this.tail == msignal_SlotList.NIL) return new msignal_SlotList(slot).prepend(this.head);
+		var wholeClone = new msignal_SlotList(this.head);
+		var subClone = wholeClone;
+		var current = this.tail;
+		while(current.nonEmpty) {
+			subClone = subClone.tail = new msignal_SlotList(current.head);
+			current = current.tail;
+		}
+		subClone.tail = new msignal_SlotList(slot);
+		return wholeClone;
 	}
 	,insertWithPriority: function(slot) {
 		if(!this.nonEmpty) return new msignal_SlotList(slot);
@@ -1755,6 +2849,15 @@ msignal_SlotList.prototype = {
 		}
 		return this;
 	}
+	,contains: function(listener) {
+		if(!this.nonEmpty) return false;
+		var p = this;
+		while(p.nonEmpty) {
+			if(Reflect.compareMethods(p.head.listener,listener)) return true;
+			p = p.tail;
+		}
+		return false;
+	}
 	,find: function(listener) {
 		if(!this.nonEmpty) return null;
 		var p = this;
@@ -1765,13 +2868,14 @@ msignal_SlotList.prototype = {
 		return null;
 	}
 	,__class__: msignal_SlotList
+	,__properties__: {get_length:"get_length"}
 };
-var utils_Common = function() { };
-$hxClasses["utils.Common"] = utils_Common;
-utils_Common.__name__ = ["utils","Common"];
 var yloader_ILoader = function() { };
 $hxClasses["yloader.ILoader"] = yloader_ILoader;
 yloader_ILoader.__name__ = ["yloader","ILoader"];
+yloader_ILoader.prototype = {
+	__class__: yloader_ILoader
+};
 var yloader_enums_Method = { __ename__ : true, __constructs__ : ["CONNECT","DELETE","GET","HEAD","OPTIONS","POST","PUT"] };
 yloader_enums_Method.CONNECT = ["CONNECT",0];
 yloader_enums_Method.CONNECT.toString = $estr;
@@ -1794,6 +2898,9 @@ yloader_enums_Method.POST.__enum__ = yloader_enums_Method;
 yloader_enums_Method.PUT = ["PUT",6];
 yloader_enums_Method.PUT.toString = $estr;
 yloader_enums_Method.PUT.__enum__ = yloader_enums_Method;
+var yloader_enums_Status = function() { };
+$hxClasses["yloader.enums.Status"] = yloader_enums_Status;
+yloader_enums_Status.__name__ = ["yloader","enums","Status"];
 var yloader_impl_js_XMLHttpRequestLoader = function(request) {
 	this.request = request;
 };
@@ -1895,6 +3002,19 @@ yloader_util_HeaderUtil.toParameters = function(text) {
 var yloader_util_ParameterUtil = function() { };
 $hxClasses["yloader.util.ParameterUtil"] = yloader_util_ParameterUtil;
 yloader_util_ParameterUtil.__name__ = ["yloader","util","ParameterUtil"];
+yloader_util_ParameterUtil.update = function(list,parameter) {
+	var found = false;
+	var _g = 0;
+	while(_g < list.length) {
+		var item = list[_g];
+		++_g;
+		if(item.name == parameter.name) {
+			item.value = parameter.value;
+			found = true;
+		}
+	}
+	if(!found) list.push(parameter);
+};
 yloader_util_ParameterUtil.urlEncode = function(list) {
 	var result = null;
 	var _g = 0;
@@ -1929,6 +3049,12 @@ yloader_valueObject_Request.prototype = {
 		if(query != null) result += (result.indexOf("?") == -1?"?":"&") + query;
 		return result;
 	}
+	,setHeader: function(header) {
+		yloader_util_ParameterUtil.update(this.headers,header);
+	}
+	,setGetParameter: function(parameter) {
+		yloader_util_ParameterUtil.update(this.getParameters,parameter);
+	}
 	,__class__: yloader_valueObject_Request
 	,__properties__: {get_urlWithQuery:"get_urlWithQuery"}
 };
@@ -1944,8 +3070,12 @@ yloader_valueObject_Response.__name__ = ["yloader","valueObject","Response"];
 yloader_valueObject_Response.prototype = {
 	__class__: yloader_valueObject_Response
 };
+function $iterator(o) { if( o instanceof Array ) return function() { return HxOverrides.iter(o); }; return typeof(o.iterator) == 'function' ? $bind(o,o.iterator) : o.iterator; }
 var $_, $fid = 0;
 function $bind(o,m) { if( m == null ) return null; if( m.__id__ == null ) m.__id__ = $fid++; var f; if( o.hx__closures__ == null ) o.hx__closures__ = {}; else f = o.hx__closures__[m.__id__]; if( f == null ) { f = function(){ return f.method.apply(f.scope, arguments); }; f.scope = o; f.method = m; o.hx__closures__[m.__id__] = f; } return f; }
+if(Array.prototype.indexOf) HxOverrides.indexOf = function(a,o,i) {
+	return Array.prototype.indexOf.call(a,o,i);
+};
 $hxClasses.Math = Math;
 String.prototype.__class__ = $hxClasses.String = String;
 String.__name__ = ["String"];
@@ -1969,18 +3099,22 @@ haxe_IMap.__meta__ = { obj : { 'interface' : null}};
 haxe_ds_ObjectMap.count = 0;
 mmvc_api_ICommand.__meta__ = { obj : { 'interface' : null}};
 mmvc_impl_TriggerCommand.__meta__ = { fields : { contextView : { type : ["mmvc.api.IViewContainer"], inject : null}, commandMap : { type : ["mmvc.api.ICommandMap"], inject : null}, injector : { type : ["minject.Injector"], inject : null}, mediatorMap : { type : ["mmvc.api.IMediatorMap"], inject : null}, triggerMap : { type : ["mmvc.api.ITriggerMap"], inject : null}}};
-imageapp_command_LoadImageListCommand.__meta__ = { fields : { list : { type : ["imageapp.model.ImageList"], inject : null}, list2 : { type : ["imageapp.model.ImageList2"], inject : null}}};
+imageapp_command_LoadImageListCommand.__meta__ = { fields : { imageList : { type : ["imageapp.model.ImageList"], inject : null}}};
 mcore_data_Collection.__meta__ = { obj : { 'interface' : null}};
+imageapp_utils_Common.Url = "http://localhost:8888/images.json";
 mmvc_impl_TriggerMediator.__meta__ = { fields : { triggerMap : { type : ["mmvc.api.ITriggerMap"], inject : null}}};
-imageapp_view_ImageViewMediator.__meta__ = { fields : { imageList : { type : ["imageapp.model.ImageList"], inject : null}, imageList2 : { type : ["imageapp.model.ImageList2"], inject : null}}};
+imageapp_view_ImageViewMediator.__meta__ = { fields : { imageList : { type : ["imageapp.model.ImageList"], inject : null}}};
 js_Boot.__toStr = {}.toString;
 minject_point_InjectionPoint.__meta__ = { obj : { 'interface' : null}};
 mmvc_api_ICommandMap.__meta__ = { obj : { 'interface' : null}};
 mmvc_api_IMediatorMap.__meta__ = { obj : { 'interface' : null}};
 mmvc_api_ITriggerMap.__meta__ = { obj : { 'interface' : null}};
 mmvc_api_IViewMap.__meta__ = { obj : { 'interface' : null}};
-utils_Common.Url = "http://localhost:8888/images.json";
 yloader_ILoader.__meta__ = { obj : { 'interface' : null}};
+yloader_enums_Status.UNKNOWN = -2;
+yloader_enums_Status.FAILED_TO_CONNECT_OR_RESOLVE_HOST = -1;
+yloader_enums_Status.UNKNOWN_HOST = 12007;
+yloader_enums_Status.FAILED_TO_CONNECT_TO_HOST = 12029;
 Main.main();
 })(typeof console != "undefined" ? console : {log:function(){}}, typeof window != "undefined" ? window : typeof global != "undefined" ? global : typeof self != "undefined" ? self : this);
 

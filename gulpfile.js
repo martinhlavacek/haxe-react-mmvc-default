@@ -9,7 +9,7 @@ var config = {
     devBaseUrl:"http://localhost",
     paths: {
         html: './src/*.html',
-        js: './src/js/*.js',
+        js: './src/js/*.*',
         json: './src/json/*.json',
         dist: './dist',
         mainJs: './src/js/index.js'

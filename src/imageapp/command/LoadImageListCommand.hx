@@ -1,45 +1,32 @@
 package imageapp.command;
 
+import imageapp.utils.Common;
+import imageapp.loader.ImageLoader;
+import imageapp.model.Image;
 import imageapp.model.ImageList2;
-//import imageapp.model.Image;
 import yloader.valueObject.Response;
 import yloader.valueObject.Request;
 import yloader.impl.js.XMLHttpRequestLoader;
-import utils.Common;
-import loader.UrlLoader;
 import imageapp.model.ImageList;
 import mmvc.impl.TriggerCommand;
 
-typedef ImageItem = {
-    var url:String;
-}
-
-typedef ImageListItem = {
-    var images: Array<ImageItem>;
-}
-
-
 class LoadImageListCommand extends TriggerCommand<ImageList>
 {
+//    @inject
+//    public var list2:ImageList2;
 
     @inject
-    public var list:ImageList;
+    public var imageList:ImageList;
 
-    @inject
-    public var list2:ImageList2;
-
-    var loader:UrlLoader;
-
+    var loader:ImageLoader;
 
     public function new()
     {
-        trace("command init");
         super();
     }
 
     override public function execute():Void
     {
-        trace("command");
         var request = new Request(Common.Url);
         var xmlLoader = new XMLHttpRequestLoader(request);
         xmlLoader.onResponse = onResponse;
@@ -48,21 +35,18 @@ class LoadImageListCommand extends TriggerCommand<ImageList>
 
     function onResponse(response: Response)
     {
-        if(response.success)
+        if (response.success)
         {
+            var listData:ImageList2 = haxe.Json.parse(response.data);
+            var arrayList:Array<Image> = new Array<Image>();
 
-            list2 = haxe.Json.parse(response.data);
-            list2.changed.dispatch();
-//            var items:ImageListItem = haxe.Json.parse(response.data);
-//
-//            for(image in items.images)
-//            {
-//                var img = new Image(image.url);
-//                this.list.add(img);
-//            }
-//
-//
-//            this.list.changed.dispatch();
+            for (image in listData.images)
+            {
+                var img = new Image(image.url);
+                arrayList.push(img);
+            }
+
+            imageList.addAll(arrayList);
         }
     }
 

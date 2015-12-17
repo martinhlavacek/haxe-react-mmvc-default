@@ -1,16 +1,17 @@
 package imageapp.view;
 
-import imageapp.model.ImageList2;
 import imageapp.model.ImageList;
+import imageapp.model.Image;
 import mmvc.impl.TriggerMediator;
+
 class ImageViewMediator extends TriggerMediator<ImageListView>
 {
 
     @inject
     public var imageList:ImageList;
 
-    @inject
-    public var imageList2:ImageList2;
+//    @inject
+//    public var imageList2:ImageList2;
 
     public function new()
     {
@@ -20,20 +21,13 @@ class ImageViewMediator extends TriggerMediator<ImageListView>
     override function onRegister()
     {
         super.onRegister();
-        trace("register - imageviewmediator");
-        trace(imageList);
-        trace(imageList2);
-        mediate(imageList2.changed.addOnce(loadCompleted));
-        triggerMap.dispatch(ImageList);
+        mediate(imageList.changed.addOnce(loadCompleted));
+        triggerMap.dispatch(imageList);
     }
-
 
     function loadCompleted()
     {
-        view.generate(imageList);
+        var data:Array<Image> = imageList.toArray();
+        view.generate(data);
     }
-
-
-
-
 }
