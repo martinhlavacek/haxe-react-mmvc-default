@@ -20,7 +20,6 @@ Application uses those components
 - yloader (Jozef Chutka library [yloader](https://github.com/jozefchutka/YLoader))
 - react (React library [React](https://facebook.github.io/react/))
 
-
 Install all nodejs packages
 
         npm install
