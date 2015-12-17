@@ -1,0 +1,17 @@
+{
+  "name": "haxe-mmvc-default",
+  "version": "0.0.1",
+  "description": "Haxe mmvc default sample",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Martin Hlavacek",
+  "license": "MIT",
+  "dependencies": {
+    "gulp": "^3.9.0",
+    "gulp-connect": "^2.2.0",
+    "gulp-open": "^1.0.0",
+    "vinyl-source-stream": "^1.1.0"
+  }
+}
