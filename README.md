@@ -10,7 +10,7 @@ gulp file has those functions:
 - watch changes on html and js files (if rebuild application and server runs then gulp runs automatic reload).
  
 
-This sample includes haxe, react, yloader, msignal, nodejs and gulp
+This sample includes haxe, react, yloader, msignal, nodejs and gulp.
 
 Install
 -------
